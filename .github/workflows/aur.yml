@@ -48,7 +48,7 @@ jobs:
       - name: Update .SRCINFO
         run: |
           docker run --rm -v $(pwd)/aur:/pkg archlinux:latest \
-            sh -c "cd /pkg && pacman -Sy --noconfirm base-devel && makepkg --printsrcinfo > .SRCINFO"
+            sh -c "useradd -m builder && chown -R builder /pkg && su builder -c 'cd /pkg && pacman -Sy --noconfirm base-devel && makepkg --printsrcinfo > .SRCINFO'"
 
       - name: Push to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
