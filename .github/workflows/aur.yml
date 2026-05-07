@@ -1,0 +1,70 @@
+name: Update AUR
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check latest release
+        id: release
+        run: |
+          VERSION=$(curl -s https://api.github.com/repos/edwardkim/rhwp/releases/latest \
+            | jq -r .tag_name | sed 's/v//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check current PKGBUILD version
+        id: current
+        run: |
+          VERSION=$(grep '^pkgver=' aur/PKGBUILD | cut -d= -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Skip if already up to date
+        if: steps.release.outputs.version == steps.current.outputs.version
+        run: |
+          echo "Already up to date: ${{ steps.current.outputs.version }}"
+          exit 0
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          VERSION=${{ steps.release.outputs.version }}
+          SHA=$(curl -sL https://github.com/edwardkim/rhwp/releases/download/v${VERSION}/rhwp-v${VERSION}-linux-x86_64.tar.gz | sha256sum | cut -d' ' -f1)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Update PKGBUILD
+        run: |
+          VERSION=${{ steps.release.outputs.version }}
+          SHA=${{ steps.sha.outputs.sha }}
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" aur/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" aur/PKGBUILD
+          sed -i "s/sha256sums=('.*')/sha256sums=('${SHA}')/" aur/PKGBUILD
+
+      - name: Update .SRCINFO
+        run: |
+          docker run --rm -v $(pwd)/aur:/pkg archlinux:latest \
+            sh -c "cd /pkg && pacman -Sy --noconfirm base-devel && makepkg --printsrcinfo > .SRCINFO"
+
+      - name: Push to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: rhwp-bin
+          pkgbuild: ./aur/PKGBUILD
+          srcinfo: ./aur/.SRCINFO
+          commit_username: sunghyun
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
+          commit_message: "Update to v${{ steps.release.outputs.version }}"
+
+      - name: Commit to GitHub
+        run: |
+          git config user.name sunghyun
+          git config user.email ${{ secrets.AUR_EMAIL }}
+          git add aur/PKGBUILD aur/.SRCINFO
+          git commit -m "Update AUR to v${{ steps.release.outputs.version }}" || exit 0
+          git push
