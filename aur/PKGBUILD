@@ -13,5 +13,5 @@ source=("rhwp-v${pkgver}-linux-x86_64.tar.gz::https://github.com/edwardkim/rhwp/
 sha256sums=('f5762d8beec06dcb33d92a416a0c53fb81cb8fa788516ba25046245c2202e09c')
 
 package() {
-    install -Dm755 rhwp "$pkgdir/usr/bin/rhwp"
+    install -Dm755 rhwp/rhwp "$pkgdir/usr/bin/rhwp"
 }
