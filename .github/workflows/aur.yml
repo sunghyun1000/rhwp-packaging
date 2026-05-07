@@ -28,9 +28,9 @@ jobs:
         if: steps.release.outputs.version == steps.current.outputs.version
         run: |
           echo "Already up to date: ${{ steps.current.outputs.version }}"
-          exit 0
 
       - name: Calculate SHA256
+        if: steps.release.outputs.version != steps.current.outputs.version
         id: sha
         run: |
           VERSION=${{ steps.release.outputs.version }}
@@ -38,6 +38,7 @@ jobs:
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
       - name: Update PKGBUILD
+        if: steps.release.outputs.version != steps.current.outputs.version
         run: |
           VERSION=${{ steps.release.outputs.version }}
           SHA=${{ steps.sha.outputs.sha }}
@@ -46,11 +47,13 @@ jobs:
           sed -i "s/sha256sums=('.*')/sha256sums=('${SHA}')/" aur/PKGBUILD
 
       - name: Update .SRCINFO
+        if: steps.release.outputs.version != steps.current.outputs.version
         run: |
           docker run --rm -v $(pwd)/aur:/pkg archlinux:latest \
-            sh -c "useradd -m builder && chown -R builder /pkg && su builder -c 'cd /pkg && pacman -Sy --noconfirm base-devel && makepkg --printsrcinfo > .SRCINFO'"
+            sh -c "pacman -Sy --noconfirm base-devel && useradd -m builder && chown -R builder /pkg && su builder -c 'cd /pkg && makepkg --printsrcinfo > .SRCINFO'"
 
       - name: Push to AUR
+        if: steps.release.outputs.version != steps.current.outputs.version
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
         with:
           pkgname: rhwp-bin
@@ -62,9 +65,10 @@ jobs:
           commit_message: "Update to v${{ steps.release.outputs.version }}"
 
       - name: Commit to GitHub
+        if: steps.release.outputs.version != steps.current.outputs.version
         run: |
           git config user.name sunghyun
           git config user.email ${{ secrets.AUR_EMAIL }}
           git add aur/PKGBUILD aur/.SRCINFO
           git commit -m "Update AUR to v${{ steps.release.outputs.version }}" || exit 0
-          git push
+          git push origin HEAD
